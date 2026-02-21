@@ -20,6 +20,8 @@ _VALID_INTENTS = {
     "top_customers",
     "top_products",
     "monthly_revenue",
+    "trend_analysis",
+    "customer_segmentation",
     "generic_sales_summary",
 }
 
@@ -28,7 +30,11 @@ def _heuristic_plan(question: str) -> Plan:
     text = question.strip().lower()
     requires_mining = any(token in text for token in ("trend", "segment", "cluster", "rfm", "anomaly"))
 
-    if any(token in text for token in ("country", "countries", "nation", "nations")):
+    if any(token in text for token in ("trend", "growth", "decline", "upward", "downward")):
+        intent = "trend_analysis"
+    elif any(token in text for token in ("segment", "segmentation", "cluster", "clusters", "rfm")):
+        intent = "customer_segmentation"
+    elif any(token in text for token in ("country", "countries", "nation", "nations")):
         intent = "country_revenue"
     elif "customer" in text and ("top" in text or "best" in text):
         intent = "top_customers"
@@ -63,7 +69,7 @@ def _ollama_plan(question: str) -> Plan:
     prompt = (
         "You are a planner for a retail SQL analytics system.\n"
         "Return JSON only with keys: intent, requires_mining.\n"
-        "Allowed intent values: country_revenue, top_customers, top_products, monthly_revenue, generic_sales_summary.\n"
+        "Allowed intent values: country_revenue, top_customers, top_products, monthly_revenue, trend_analysis, customer_segmentation, generic_sales_summary.\n"
         "requires_mining must be true if question asks about trend/segment/cluster/rfm/anomaly, else false.\n"
         f"Question: {question}"
     )
@@ -106,10 +112,30 @@ def _ollama_plan(question: str) -> Plan:
 
 def build_plan(question: str) -> Plan:
     load_environments()
+    heuristic_plan = _heuristic_plan(question)
     if os.getenv("OLLAMA_PLANNER_ENABLED", "1").strip().lower() in {"0", "false", "no"}:
-        return _heuristic_plan(question)
+        return heuristic_plan
 
     try:
-        return _ollama_plan(question)
+        ollama_plan = _ollama_plan(question)
+        text = question.strip().lower()
+
+        # Deterministic correction for entity-specific questions where misclassification is costly.
+        if any(token in text for token in ("trend", "growth", "decline", "upward", "downward")):
+            ollama_plan.intent = "trend_analysis"
+        elif any(token in text for token in ("segment", "segmentation", "cluster", "clusters", "rfm")):
+            ollama_plan.intent = "customer_segmentation"
+        elif any(token in text for token in ("country", "countries", "nation", "nations")):
+            ollama_plan.intent = "country_revenue"
+        elif "customer" in text and ("top" in text or "best" in text):
+            ollama_plan.intent = "top_customers"
+        elif "product" in text and ("top" in text or "best" in text):
+            ollama_plan.intent = "top_products"
+        elif "month" in text or "monthly" in text:
+            ollama_plan.intent = "monthly_revenue"
+        elif ollama_plan.intent not in _VALID_INTENTS:
+            ollama_plan.intent = heuristic_plan.intent
+
+        return ollama_plan
     except Exception:
-        return _heuristic_plan(question)
+        return heuristic_plan

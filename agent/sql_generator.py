@@ -28,6 +28,21 @@ INTENT_SQL = {
         GROUP BY 1
         ORDER BY 1
     """,
+    "trend_analysis": """
+        SELECT to_char(date_trunc('month', f.invoice_timestamp), 'YYYY-MM') AS month_key,
+               ROUND(SUM(f.total_amount), 4) AS revenue
+        FROM fact_sales f
+        GROUP BY 1
+        ORDER BY 1
+    """,
+    "customer_segmentation": """
+        SELECT customer_id,
+               COUNT(*)::int AS frequency,
+               ROUND(SUM(total_amount), 4) AS monetary
+        FROM fact_sales
+        GROUP BY customer_id
+        ORDER BY monetary DESC
+    """,
     "generic_sales_summary": """
         SELECT COUNT(*) AS rows_loaded, ROUND(SUM(total_amount), 4) AS revenue
         FROM fact_sales
