@@ -4,6 +4,7 @@ from agent.evaluator import evaluate_result
 from agent.executor import UnsafeSQLError, execute_safe_query
 from agent.planner import build_plan
 from agent.sql_generator import generate_sql
+from mining.snapshots import get_snapshot
 from api.schemas import AnalyzeDebugResponse, AnalyzeRequest, AnalyzeResponse
 
 router = APIRouter()
@@ -18,15 +19,36 @@ def _run_analyze(request: AnalyzeRequest, debug_mode: bool = False):
     plan = build_plan(request.question)
     retries_used = 0
     sql = generate_sql(plan, strict=False)
+    snapshot_meta = None
 
     try:
-        rows = execute_safe_query(sql, row_limit=request.row_limit, timeout_ms=request.timeout_ms)
-        evaluation = evaluate_result(rows)
-        if evaluation["status"] == "retry":
-            retries_used = 1
-            sql = generate_sql(plan, strict=True)
+        if plan.intent in {"trend_analysis", "customer_segmentation"}:
+            snapshot = get_snapshot(plan.intent, refresh_if_stale=True)
+            snapshot_meta = {
+                "snapshot_type": snapshot["snapshot_type"],
+                "generated_at": snapshot["generated_at"],
+                "source_max_date": snapshot["source_max_date"],
+                "refreshed": snapshot["refreshed"],
+            }
+            sql = "-- mining snapshot retrieval"
+            rows = [
+                {
+                    "snapshot_type": snapshot["snapshot_type"],
+                    "generated_at": snapshot["generated_at"],
+                    "source_max_date": snapshot["source_max_date"],
+                    "refreshed": snapshot["refreshed"],
+                    "data": snapshot["snapshot_json"],
+                }
+            ]
+            evaluation = {"status": "ok", "reason": None}
+        else:
             rows = execute_safe_query(sql, row_limit=request.row_limit, timeout_ms=request.timeout_ms)
             evaluation = evaluate_result(rows)
+            if evaluation["status"] == "retry":
+                retries_used = 1
+                sql = generate_sql(plan, strict=True)
+                rows = execute_safe_query(sql, row_limit=request.row_limit, timeout_ms=request.timeout_ms)
+                evaluation = evaluate_result(rows)
     except UnsafeSQLError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -52,6 +74,7 @@ def _run_analyze(request: AnalyzeRequest, debug_mode: bool = False):
             "requires_mining": plan.requires_mining,
             "row_count": len(rows),
             "strict_retry_used": retries_used == 1,
+            "snapshot": snapshot_meta,
         },
     )
 

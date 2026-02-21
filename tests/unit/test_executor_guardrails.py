@@ -13,8 +13,8 @@ def test_validate_sql_rejects_non_select_statement():
         validate_sql("DELETE FROM fact_sales")
 
 
-def test_validate_sql_rejects_blocked_keyword_in_cte():
-    with pytest.raises(UnsafeSQLError, match="Blocked SQL keyword detected: drop"):
+def test_validate_sql_rejects_multiple_statements_before_keyword_checks():
+    with pytest.raises(UnsafeSQLError, match="Multiple SQL statements are not allowed"):
         validate_sql("WITH x AS (SELECT 1) SELECT * FROM x; DROP TABLE fact_sales;")
 
 
@@ -73,4 +73,3 @@ def test_execute_safe_query_sets_statement_timeout(monkeypatch):
     assert fake_session.conn.cursor_obj.executed[0] == ("SET statement_timeout = '3210ms'", None)
     assert "LIMIT %s" in fake_session.conn.cursor_obj.executed[1][0]
     assert fake_session.conn.cursor_obj.executed[1][1] == (5,)
-

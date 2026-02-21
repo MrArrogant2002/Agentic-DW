@@ -48,3 +48,10 @@ CREATE INDEX idx_fact_product ON fact_sales(product_id);
 CREATE INDEX idx_fact_date ON fact_sales(date_id);
 CREATE INDEX idx_fact_invoice_ts ON fact_sales(invoice_timestamp);
 CREATE INDEX idx_fact_invoice_no ON fact_sales(invoice_no);
+
+CREATE TABLE IF NOT EXISTS mining_snapshots (
+    snapshot_type VARCHAR(64) PRIMARY KEY,
+    snapshot_json JSONB NOT NULL,
+    source_max_date DATE,
+    generated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

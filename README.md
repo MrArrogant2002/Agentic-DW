@@ -154,3 +154,42 @@ curl -X POST "http://127.0.0.1:8000/analyze" \
   -H "Content-Type: application/json" \
   -d "{\"question\":\"Top 5 countries by revenue\",\"row_limit\":5}"
 ```
+
+## Phase 5 Mining Modules
+
+Run trend analysis:
+
+```bash
+python -m mining.trend --pretty
+```
+
+Build RFM features:
+
+```bash
+python -m mining.rfm --pretty
+```
+
+Run clustering:
+
+```bash
+python -m mining.clustering --k 4 --pretty
+```
+
+Refresh mining snapshots (precompute/cache):
+
+```bash
+python -m mining.snapshots --all --pretty
+```
+
+Read one snapshot (auto-refresh if stale):
+
+```bash
+python -m mining.snapshots --type trend_analysis --pretty
+python -m mining.snapshots --type customer_segmentation --pretty
+```
+
+Snapshot cache behavior in API:
+
+- For mining intents (`trend_analysis`, `customer_segmentation`), `/analyze` serves from `mining_snapshots`.
+- If snapshot is missing or stale, API recomputes and updates snapshot automatically.
+- Staleness TTL can be configured with `MINING_SNAPSHOT_TTL_HOURS` (default: `24`).
