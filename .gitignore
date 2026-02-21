@@ -8,8 +8,8 @@ __pycache__/
 
 # Virtual environments
 .venv/
-venv/
-env/
+
+.env
 
 # ETL/generated artifacts
 data/processed/
