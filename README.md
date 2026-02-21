@@ -5,6 +5,7 @@ This repository now includes a baseline implementation for:
 - Data warehouse schema (`agentic_ai_db.sql`)
 - Reproducible ETL pipeline (`etl/`)
 - Validation SQL pack (`sql/validations/`)
+- Phase 4 API baseline (`api/`, `agent/`)
 
 ## Repository Structure
 
@@ -60,6 +61,12 @@ or
 pip install psycopg2-binary
 ```
 
+Install API dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
 ## Database Setup
 
 Run the schema before the first load:
@@ -111,3 +118,33 @@ Run:
 Expected values for the current `data.csv` are documented in:
 
 - `sql/validations/EXPECTED_OUTPUTS.md`
+
+## Phase 4 API (Baseline)
+
+Run API:
+
+```bash
+uvicorn api.main:app --reload
+```
+
+Ollama planner configuration (optional, defaults shown):
+
+- `OLLAMA_PLANNER_ENABLED=1`
+- `OLLAMA_MODEL=mistral:latest`
+- `OLLAMA_BASE_URL=http://localhost:11434`
+- `OLLAMA_TIMEOUT_SEC=20`
+
+If Ollama is unavailable, planner falls back to rule-based intent mapping.
+
+Endpoints:
+
+- `GET /health`
+- `POST /analyze`
+
+Example request:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/analyze" \
+  -H "Content-Type: application/json" \
+  -d "{\"question\":\"Top 5 countries by revenue\",\"row_limit\":5}"
+```
