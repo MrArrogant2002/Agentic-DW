@@ -35,6 +35,8 @@ INTENT_SQL = {
 }
 
 
-def generate_sql(plan: Plan) -> str:
+def generate_sql(plan: Plan, strict: bool = False) -> str:
+    if strict:
+        # Strict retry fallback to a guaranteed summary query if first pass returns empty.
+        return INTENT_SQL["generic_sales_summary"].strip()
     return INTENT_SQL.get(plan.intent, INTENT_SQL["generic_sales_summary"]).strip()
-

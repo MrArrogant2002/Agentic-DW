@@ -12,8 +12,13 @@ class AnalyzeRequest(BaseModel):
 class AnalyzeResponse(BaseModel):
     question: str
     intent: str
+    planner_source: str
     sql: str
     evaluator_status: str
     evaluator_reason: Optional[str]
+    retries_used: int
     rows: List[Dict[str, Any]]
 
+
+class AnalyzeDebugResponse(AnalyzeResponse):
+    debug: Dict[str, Any]
