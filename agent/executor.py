@@ -3,6 +3,8 @@ import re
 from contextlib import contextmanager
 from typing import Any, Dict, List
 
+from utils.env_loader import load_environments
+
 
 class UnsafeSQLError(ValueError):
     pass
@@ -53,15 +55,25 @@ def validate_sql(sql: str) -> str:
 
 
 def _build_db_params() -> Dict[str, Any]:
+    load_environments()
+    host = os.getenv("DB_HOST")
+    dbname = os.getenv("DB_NAME")
+    user = os.getenv("DB_USER")
     password = os.getenv("DB_PASSWORD")
+    if not host:
+        raise ValueError("DB_HOST is required")
+    if not dbname:
+        raise ValueError("DB_NAME is required")
+    if not user:
+        raise ValueError("DB_USER is required")
     if not password:
         raise ValueError("DB_PASSWORD is required")
 
     return {
-        "host": os.getenv("DB_HOST", "localhost"),
+        "host": host,
         "port": int(os.getenv("DB_PORT", "5432")),
-        "dbname": os.getenv("DB_NAME", "agentic_ai_db"),
-        "user": os.getenv("DB_USER", "postgres"),
+        "dbname": dbname,
+        "user": user,
         "password": password,
     }
 
@@ -90,13 +102,15 @@ def db_session():
 def execute_safe_query(sql: str, row_limit: int = 100, timeout_ms: int = 15_000) -> List[Dict[str, Any]]:
     if row_limit <= 0:
         raise ValueError("row_limit must be positive")
+    if timeout_ms <= 0:
+        raise ValueError("timeout_ms must be positive")
 
     safe_sql = validate_sql(sql)
     wrapped_sql = f"SELECT * FROM ({safe_sql}) AS guarded_query LIMIT %s"
 
     with db_session() as (conn, driver):
         with conn.cursor() as cur:
-            cur.execute("SET statement_timeout = %s", (timeout_ms,))
+            cur.execute(f"SET statement_timeout = '{int(timeout_ms)}ms'")
             cur.execute(wrapped_sql, (row_limit,))
             rows = cur.fetchall()
             columns = [desc[0] for desc in cur.description]
@@ -105,4 +119,3 @@ def execute_safe_query(sql: str, row_limit: int = 100, timeout_ms: int = 15_000)
             for row in rows:
                 result.append({columns[i]: row[i] for i in range(len(columns))})
             return result
-

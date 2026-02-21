@@ -5,15 +5,24 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Dict, Iterator, List, Tuple
 
+from utils.env_loader import load_environments
+
 
 def _get_connection():
+    load_environments()
     db_params = {
-        "host": os.getenv("DB_HOST", "localhost"),
+        "host": os.getenv("DB_HOST"),
         "port": int(os.getenv("DB_PORT", "5432")),
-        "dbname": os.getenv("DB_NAME", "agentic_ai_db"),
-        "user": os.getenv("DB_USER", "postgres"),
+        "dbname": os.getenv("DB_NAME"),
+        "user": os.getenv("DB_USER"),
         "password": os.getenv("DB_PASSWORD"),
     }
+    if not db_params["host"]:
+        raise ValueError("DB_HOST is required")
+    if not db_params["dbname"]:
+        raise ValueError("DB_NAME is required")
+    if not db_params["user"]:
+        raise ValueError("DB_USER is required")
     if not db_params["password"]:
         raise ValueError("DB_PASSWORD is required")
     if db_params["password"] in {"your_password", "your_password_here", "changeme"}:

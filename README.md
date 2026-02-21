@@ -79,10 +79,10 @@ Run the schema before the first load:
 
 Set DB environment variables in either way:
 
-- `DB_HOST` (default: `localhost`)
+- `DB_HOST` (required)
 - `DB_PORT` (default: `5432`)
-- `DB_NAME` (default: `agentic_ai_db`)
-- `DB_USER` (default: `postgres`)
+- `DB_NAME` (required)
+- `DB_USER` (required)
 - `DB_PASSWORD` (required)
 
 Option A:
@@ -140,6 +140,12 @@ Endpoints:
 
 - `GET /health`
 - `POST /analyze`
+- `POST /analyze/debug`
+
+`/analyze` response includes:
+
+- `planner_source` (`ollama` or `fallback`)
+- `retries_used` (0 or 1)
 
 Example request:
 

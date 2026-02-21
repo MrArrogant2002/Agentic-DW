@@ -4,12 +4,15 @@ import re
 from urllib import error, request
 from dataclasses import dataclass
 
+from utils.env_loader import load_environments
+
 
 @dataclass
 class Plan:
     question: str
     requires_mining: bool
     intent: str
+    planner_source: str
 
 
 _VALID_INTENTS = {
@@ -25,7 +28,7 @@ def _heuristic_plan(question: str) -> Plan:
     text = question.strip().lower()
     requires_mining = any(token in text for token in ("trend", "segment", "cluster", "rfm", "anomaly"))
 
-    if "country" in text:
+    if any(token in text for token in ("country", "countries", "nation", "nations")):
         intent = "country_revenue"
     elif "customer" in text and ("top" in text or "best" in text):
         intent = "top_customers"
@@ -36,7 +39,7 @@ def _heuristic_plan(question: str) -> Plan:
     else:
         intent = "generic_sales_summary"
 
-    return Plan(question=question, requires_mining=requires_mining, intent=intent)
+    return Plan(question=question, requires_mining=requires_mining, intent=intent, planner_source="fallback")
 
 
 def _extract_json_blob(text: str) -> dict:
@@ -52,9 +55,10 @@ def _extract_json_blob(text: str) -> dict:
 
 
 def _ollama_plan(question: str) -> Plan:
-    model = os.getenv("OLLAMA_MODEL")
-    base_url = os.getenv("OLLAMA_BASE_URL")
-    timeout_sec = float(os.getenv("OLLAMA_TIMEOUT_SEC"))
+    load_environments()
+    model = os.getenv("OLLAMA_MODEL", "mistral:latest")
+    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    timeout_sec = float(os.getenv("OLLAMA_TIMEOUT_SEC", "20"))
 
     prompt = (
         "You are a planner for a retail SQL analytics system.\n"
@@ -97,10 +101,11 @@ def _ollama_plan(question: str) -> Plan:
     if intent not in _VALID_INTENTS:
         raise RuntimeError(f"Ollama returned invalid intent: {intent}")
 
-    return Plan(question=question, requires_mining=requires_mining, intent=intent)
+    return Plan(question=question, requires_mining=requires_mining, intent=intent, planner_source="ollama")
 
 
 def build_plan(question: str) -> Plan:
+    load_environments()
     if os.getenv("OLLAMA_PLANNER_ENABLED", "1").strip().lower() in {"0", "false", "no"}:
         return _heuristic_plan(question)
 
