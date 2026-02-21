@@ -181,7 +181,33 @@ Exit Criteria:
 1. Core metrics meet predefined thresholds.
 2. Failure and recovery paths are validated.
 
-### Phase 8: Documentation and Presentation Readiness
+### Phase 8: Cross-Database Generalization (Portability Extension)
+Objective:
+Enable the autonomous SQL agent to adapt across SQL database engines with minimal code change.
+
+Implementation Description:
+1. Introduce a database adapter interface:
+   - `adapters/base.py` with common methods (`connect`, `introspect_schema`, `execute_safe_query`).
+   - `adapters/postgres.py` as reference implementation.
+   - `adapters/mysql.py` and `adapters/sqlite.py` as additional dialect adapters.
+2. Add schema introspection modules per adapter:
+   - Collect tables, columns, key relations, and sample value hints.
+3. Make SQL generation dialect-aware:
+   - Route prompt templates by dialect (PostgreSQL/MySQL/SQLite).
+   - Include dialect-specific syntax rules (date functions, limit clauses, type casting).
+4. Extend SQL safety validator for dialect-specific constraints and denylist coverage.
+5. Add adapter conformance tests and cross-dialect query parity checks.
+
+Deliverables:
+1. Adapter-based execution layer.
+2. Schema introspection pipeline for at least 3 SQL engines.
+3. Dialect-aware SQL generation and validation strategy.
+
+Exit Criteria:
+1. Same natural-language query flow works on PostgreSQL and at least one additional engine.
+2. Core analytical query outputs are consistent across supported adapters (within acceptable tolerances).
+
+### Phase 9: Documentation and Presentation Readiness
 Objective:
 Package the system into a complete academic and engineering deliverable.
 
@@ -232,6 +258,11 @@ project/
     main.py
     routes.py
     schemas.py
+  adapters/
+    base.py
+    postgres.py
+    mysql.py
+    sqlite.py
   sql/
     validations/
     benchmarks/
@@ -246,9 +277,13 @@ project/
 
 ## 5. Current Position and Immediate Next Step
 Current Position:
-1. PostgreSQL installed.
-2. Database created.
-3. Star schema created with indexes.
+1. PostgreSQL warehouse schema is created and hardened.
+2. Reproducible ETL pipeline is implemented and verified.
+3. Validation SQL baseline is implemented.
+4. Phase 4 autonomous SQL API baseline is operational (planner + generator + safe executor + evaluator).
 
 Immediate Next Step:
-Start Phase 2 by implementing the ETL pipeline and making warehouse loading fully reproducible.
+Start Phase 5 by implementing the Pattern Mining Engine:
+1. `mining/trend.py` for monthly trend slope and direction.
+2. `mining/rfm.py` for customer-level Recency/Frequency/Monetary features.
+3. `mining/clustering.py` for KMeans segmentation + silhouette validation.

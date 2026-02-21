@@ -5,6 +5,7 @@ This repository now includes a baseline implementation for:
 - Data warehouse schema (`agentic_ai_db.sql`)
 - Reproducible ETL pipeline (`etl/`)
 - Validation SQL pack (`sql/validations/`)
+- Phase 4 API baseline (`api/`, `agent/`)
 
 ## Repository Structure
 
@@ -60,6 +61,12 @@ or
 pip install psycopg2-binary
 ```
 
+Install API dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
 ## Database Setup
 
 Run the schema before the first load:
@@ -72,10 +79,10 @@ Run the schema before the first load:
 
 Set DB environment variables in either way:
 
-- `DB_HOST` (default: `localhost`)
+- `DB_HOST` (required)
 - `DB_PORT` (default: `5432`)
-- `DB_NAME` (default: `agentic_ai_db`)
-- `DB_USER` (default: `postgres`)
+- `DB_NAME` (required)
+- `DB_USER` (required)
 - `DB_PASSWORD` (required)
 
 Option A:
@@ -111,3 +118,78 @@ Run:
 Expected values for the current `data.csv` are documented in:
 
 - `sql/validations/EXPECTED_OUTPUTS.md`
+
+## Phase 4 API (Baseline)
+
+Run API:
+
+```bash
+uvicorn api.main:app --reload
+```
+
+Ollama planner configuration (optional, defaults shown):
+
+- `OLLAMA_PLANNER_ENABLED=1`
+- `OLLAMA_MODEL=mistral:latest`
+- `OLLAMA_BASE_URL=http://localhost:11434`
+- `OLLAMA_TIMEOUT_SEC=20`
+
+If Ollama is unavailable, planner falls back to rule-based intent mapping.
+
+Endpoints:
+
+- `GET /health`
+- `POST /analyze`
+- `POST /analyze/debug`
+
+`/analyze` response includes:
+
+- `planner_source` (`ollama` or `fallback`)
+- `retries_used` (0 or 1)
+
+Example request:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/analyze" \
+  -H "Content-Type: application/json" \
+  -d "{\"question\":\"Top 5 countries by revenue\",\"row_limit\":5}"
+```
+
+## Phase 5 Mining Modules
+
+Run trend analysis:
+
+```bash
+python -m mining.trend --pretty
+```
+
+Build RFM features:
+
+```bash
+python -m mining.rfm --pretty
+```
+
+Run clustering:
+
+```bash
+python -m mining.clustering --k 4 --pretty
+```
+
+Refresh mining snapshots (precompute/cache):
+
+```bash
+python -m mining.snapshots --all --pretty
+```
+
+Read one snapshot (auto-refresh if stale):
+
+```bash
+python -m mining.snapshots --type trend_analysis --pretty
+python -m mining.snapshots --type customer_segmentation --pretty
+```
+
+Snapshot cache behavior in API:
+
+- For mining intents (`trend_analysis`, `customer_segmentation`), `/analyze` serves from `mining_snapshots`.
+- If snapshot is missing or stale, API recomputes and updates snapshot automatically.
+- Staleness TTL can be configured with `MINING_SNAPSHOT_TTL_HOURS` (default: `24`).
