@@ -37,9 +37,16 @@ def connect():
 
         return psycopg.connect(**params)
     except ImportError:
-        import psycopg2  # type: ignore
+        try:
+            import psycopg2  # type: ignore
 
-        return psycopg2.connect(**params)
+            return psycopg2.connect(**params)
+        except ImportError as exc:
+            raise ImportError(
+                "No PostgreSQL driver found for mining. Install one of: "
+                "`python -m pip install \"psycopg[binary]\"` or "
+                "`python -m pip install psycopg2-binary`."
+            ) from exc
 
 
 @contextmanager

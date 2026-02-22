@@ -22,3 +22,12 @@ class AnalyzeResponse(BaseModel):
 
 class AnalyzeDebugResponse(AnalyzeResponse):
     debug: Dict[str, Any]
+
+
+class MiningRefreshRequest(BaseModel):
+    snapshot_type: Optional[str] = Field(default=None, description="trend_analysis or customer_segmentation")
+    refresh_all: bool = Field(default=False)
+
+
+class MiningRefreshResponse(BaseModel):
+    refreshed: List[Dict[str, Any]]

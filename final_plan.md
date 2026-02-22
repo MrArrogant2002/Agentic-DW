@@ -2,267 +2,319 @@
 ## Design and Implementation of an Autonomous SQL Agent for Data Warehouse Analytics and Pattern Discovery
 
 ## 1. Project Goal
-Build an end-to-end autonomous analytics system that:
-1. Accepts natural language business questions.
-2. Translates them into safe analytical SQL over a retail data warehouse.
-3. Executes and evaluates results.
-4. Runs algorithmic pattern mining (trend analysis and customer segmentation).
-5. Produces structured, business-readable insights.
+Build a production-style autonomous analytics agent that can:
+1. Understand natural-language analytical questions.
+2. Introspect arbitrary SQL database schemas.
+3. Plan and generate safe SQL dynamically.
+4. Execute queries with strict guardrails.
+5. Run mining workflows (trend/segmentation) on scoped data.
+6. Generate grounded, evidence-linked insights.
+7. Support multiple SQL engines via adapter architecture.
 
-## 2. Target Architecture
-User Query -> FastAPI -> Planner Agent -> SQL Generator -> Safe SQL Executor -> Result Evaluator -> Pattern Mining Engine -> Insight Generator -> Structured Report
+## 2. Target End-State Architecture
+User Query -> API -> Planner (LLM) -> Schema-Aware Plan -> SQL Generator (LLM + Schema Context) -> Safe Executor -> Evaluator + Self-Healing -> Mining Engine -> Grounded Insight Generator -> Structured Report
 
-## 3. Phase-Wise Implementation Plan
+Supporting Control Plane:
+Schema Introspector -> Semantic Mapper -> Metadata Store/Cache -> Adapter Layer (Postgres/MySQL/SQLite)
 
-### Phase 1: Data Engineering Foundation
+## 3. Phase-Wise Implementation Plan (Updated)
+
+### Phase 1: Data Foundation and Warehouse Reliability
 Objective:
-Create a reliable analytical warehouse based on the Online Retail dataset.
+Establish a clean, reproducible warehouse foundation.
 
-Implementation Description:
-1. Profile the source dataset and define data quality rules.
-2. Clean invalid records (null IDs, non-positive quantity or price where required, malformed dates).
-3. Design star schema with one fact table and supporting dimensions.
-4. Implement schema in PostgreSQL with constraints and foreign keys.
-5. Create indexes for analytical filters and joins.
+Implementation:
+1. Profile and clean source datasets.
+2. Define warehouse schema with constraints/indexes.
+3. Build idempotent ETL with logging and rejects.
 
 Deliverables:
-1. Clean dataset definition and cleaning rules.
-2. Star schema and ER diagram.
-3. Created PostgreSQL tables and indexes.
+1. Warehouse schema and ETL pipeline.
+2. Data quality summary.
+3. Reproducible load command.
 
 Exit Criteria:
-1. Fact and dimension tables are queryable with valid relationships.
-2. Basic aggregate queries run without integrity issues.
+1. Re-runs produce consistent row counts.
+2. Core validation SQL matches expected outputs.
 
-Status:
-Core schema setup is completed in `agentic_ai_db`.
-
-### Phase 2: Reproducible ETL Pipeline
+### Phase 2: Analytical Baseline and Performance Verification
 Objective:
-Automate data ingestion and transformation so warehouse population is repeatable.
+Lock correctness and performance before autonomous behavior.
 
-Implementation Description:
-1. Build ETL modules:
-   - `etl/extract.py` for raw CSV loading.
-   - `etl/transform.py` for cleaning and dimension/fact shaping.
-   - `etl/load.py` for PostgreSQL inserts or bulk loads.
-   - `etl/pipeline.py` for orchestration.
-2. Separate `data/raw` and `data/processed` artifacts.
-3. Add idempotency strategy (truncate-and-reload or upsert with keys).
-4. Add logging for row counts, rejects, and run duration.
-5. Add exception handling and failure-safe rollback behavior.
+Implementation:
+1. Validation query pack (revenue, top entities, trends).
+2. `EXPLAIN ANALYZE` and index verification.
+3. Baseline latency measurements.
 
 Deliverables:
-1. End-to-end ETL script(s).
-2. Re-runnable warehouse loading process.
-3. ETL run logs and data quality summary.
+1. Validation SQL suite.
+2. Benchmark report.
 
 Exit Criteria:
-1. A single command rebuilds warehouse tables from raw input.
-2. Re-running ETL does not produce duplicate facts.
+1. Correctness checks pass.
+2. Latency is stable and documented.
 
-### Phase 3: Analytical SQL Validation Layer
+### Phase 3: Schema Introspector Layer (Per DB)
 Objective:
-Validate warehouse correctness and performance before introducing agents.
+Make the system discover and understand unknown schemas.
 
-Implementation Description:
-1. Create a query pack for common analytics:
-   - Monthly revenue.
-   - Country-wise revenue.
-   - Top customers.
-   - Top products.
-   - Seasonal trend summaries.
-2. Run `EXPLAIN ANALYZE` to verify plan quality.
-3. Validate index usage on key filters and joins.
-4. Benchmark execution times and record baselines.
+Implementation:
+1. Implement introspection per adapter:
+   - Tables, columns, data types.
+   - Primary keys, foreign keys.
+   - Row counts per table.
+2. Build normalized metadata object:
+   - `entities` (candidate grouping dimensions)
+   - `measures` (candidate numeric aggregations)
+   - `time_columns` (date/timestamp candidates)
+   - `relationships` (join graph)
 
 Deliverables:
-1. SQL validation scripts.
-2. Performance benchmark report.
+1. `schema_introspector` modules per DB adapter.
+2. Normalized schema metadata JSON.
 
 Exit Criteria:
-1. Query outputs are business-correct.
-2. Core analytics execute within acceptable latency targets.
+1. Any supported DB yields normalized metadata.
+2. Join graph is machine-usable for SQL generation.
 
-### Phase 4: Autonomous SQL Agent Core
+### Phase 4: Semantic Mapping Layer
 Objective:
-Implement safe natural language to SQL reasoning and execution.
+Map raw schema to business-usable analytical roles.
 
-Implementation Description:
-1. Build FastAPI endpoints for analysis requests and health checks.
-2. Implement `planner` module to decompose user intent into sub-tasks.
-3. Implement `sql_generator` module with schema-aware prompt templates.
-4. Implement `executor` module with hard guardrails:
-   - SELECT-only policy.
-   - Statement validation and denylist checks.
-   - Timeout and row limits.
-5. Implement `result_evaluator` module to detect SQL errors, empty results, and invalid granularity.
-6. Add retry loop with controlled regeneration when evaluator flags issues.
+Implementation:
+1. Convert schema metadata to semantic roles:
+   - Entity candidates (`country`, `customer`, `product`, etc.).
+   - Value candidates (`amount`, `revenue`, `price*qty`, etc.).
+   - Time candidates (`date`, `created_at`, etc.).
+2. Score candidates using heuristics:
+   - Naming signals.
+   - Data type compatibility.
+   - Cardinality/distribution signals.
+3. Produce ranked semantic map for planner/builder.
 
 Deliverables:
-1. Working NL-to-SQL flow with multi-step planning.
-2. Safe executor and evaluator pipeline.
+1. Semantic map output with confidence scores.
+2. Heuristic scoring policy.
 
 Exit Criteria:
-1. Common business queries run end-to-end from natural language input.
-2. Unsafe SQL is blocked consistently.
+1. Planner can request entity/value/time from semantic map.
+2. Misclassification rate is measurable.
 
-### Phase 5: Pattern Mining Engine
+### Phase 5: Structured Planner (LLM-Only)
 Objective:
-Add algorithmic intelligence beyond direct SQL retrieval.
+Move from flat intent classification to executable analytical plans.
 
-Implementation Description:
-1. Create `mining/trend.py`:
-   - Aggregate monthly sales.
-   - Fit linear regression.
-   - Compute slope and trend direction.
-2. Create `mining/rfm.py`:
-   - Compute Recency, Frequency, Monetary features per customer.
-   - Standardize features for clustering.
-3. Create `mining/clustering.py`:
-   - Run KMeans.
-   - Evaluate cluster quality with silhouette score.
-   - Generate interpretable cluster labels.
-4. Add optional anomaly detection extension (z-score or residual-based).
+Implementation:
+1. Planner returns structured plan JSON, not just intent.
+2. Required plan fields:
+   - `task_type`
+   - `entity_scope` (e.g., `top_n`, `all`)
+   - `entity_dimension`
+   - `n`
+   - `metric`
+   - `time_grain`
+   - `compare_against`
+3. Validate plan schema before downstream execution.
 
 Deliverables:
-1. Trend analysis outputs with quantitative indicators.
-2. Customer segments with quality metrics.
+1. Planner output contract and validator.
+2. Plan trace logs.
 
 Exit Criteria:
-1. Mining modules run deterministically from warehouse data.
-2. Cluster quality is measurable and documented.
+1. Planner outputs valid structured plans consistently.
+2. Invalid plans are rejected and retried safely.
 
-### Phase 6: Insight Generation and Structured Reporting
+### Phase 6: Dynamic SQL Builder + Safe Executor
 Objective:
-Convert SQL and mining outputs into decision-ready business insights.
+Generate SQL from structured plans using schema graph.
 
-Implementation Description:
-1. Define strict JSON schema for final response payload.
-2. Build `insight_generator` prompt templates that explain results without fabricating math.
-3. Merge:
-   - Query context.
-   - SQL outputs.
-   - Trend and clustering outputs.
-4. Produce concise narrative insights, risks, and recommended next actions.
-5. Return machine-readable plus human-readable report sections.
+Implementation:
+1. Build SQL generation pipeline with two modes:
+   - LLM SQL generation from schema context.
+   - Deterministic SQL templates/AST fallback for constrained tasks.
+2. Provide compact schema context to LLM:
+   - Allowed tables/columns.
+   - Join graph and key paths.
+   - Semantic map selections (entity, metric, time).
+3. Resolve joins from relationship graph.
+4. Apply hard guardrails:
+   - SELECT-only
+   - Single statement
+   - LIMIT policy
+   - Timeout policy
+   - Allowlist tables/columns from introspection metadata
 
 Deliverables:
-1. Structured report format.
-2. Reliable insight narratives tied to computed evidence.
+1. Plan-to-SQL compiler with schema-aware LLM mode.
+2. Safety validator integrated before execution.
+3. SQL generation prompt contract and output parser.
 
 Exit Criteria:
-1. Reports are consistent, traceable, and easy to consume.
-2. Every narrative claim maps to computed values.
+1. SQL generated for unseen supported schemas.
+2. Unsafe SQL blocked deterministically.
+3. LLM-generated SQL uses only allowlisted identifiers.
 
-### Phase 7: Evaluation, Observability, and Hardening
+### Phase 7: Validation + Self-Healing Loop
 Objective:
-Demonstrate reliability, quality, and operational readiness.
+Recover from SQL generation/runtime errors autonomously.
 
-Implementation Description:
-1. Add metrics collection:
-   - SQL generation success rate.
-   - Execution latency.
-   - Retry rate.
-   - Mining runtime.
-   - Clustering quality scores.
-2. Add test suites:
-   - Unit tests for ETL and mining logic.
-   - Integration tests for FastAPI to executor flow.
-   - Negative tests for SQL safety guardrails.
-3. Add logging and trace IDs for request-level debugging.
-4. Perform error-path validation and recovery tests.
+Implementation:
+1. Classify failures:
+   - Missing column/table.
+   - Wrong/ambiguous join.
+   - Type mismatch.
+   - Empty/invalid granularity output.
+2. Regenerate SQL using:
+   - DB error details.
+   - Schema metadata.
+   - Previous failed SQL.
+3. Use controlled repair prompt for LLM SQL regeneration.
+4. Limit retries (e.g., max 2).
 
 Deliverables:
-1. Evaluation report with metrics.
-2. Test evidence and quality gates.
+1. Error taxonomy and retry controller.
+2. Regeneration prompts/workflow.
 
 Exit Criteria:
-1. Core metrics meet predefined thresholds.
-2. Failure and recovery paths are validated.
+1. Controlled retry behavior with bounded attempts.
+2. Improved success rate vs no-healing baseline.
 
-### Phase 8: Cross-Database Generalization (Portability Extension)
+### Phase 8: Domain-Agnostic Mining Interface
 Objective:
-Enable the autonomous SQL agent to adapt across SQL database engines with minimal code change.
+Decouple mining algorithms from dataset-specific feature logic.
 
-Implementation Description:
-1. Introduce a database adapter interface:
-   - `adapters/base.py` with common methods (`connect`, `introspect_schema`, `execute_safe_query`).
-   - `adapters/postgres.py` as reference implementation.
-   - `adapters/mysql.py` and `adapters/sqlite.py` as additional dialect adapters.
-2. Add schema introspection modules per adapter:
-   - Collect tables, columns, key relations, and sample value hints.
-3. Make SQL generation dialect-aware:
-   - Route prompt templates by dialect (PostgreSQL/MySQL/SQLite).
-   - Include dialect-specific syntax rules (date functions, limit clauses, type casting).
-4. Extend SQL safety validator for dialect-specific constraints and denylist coverage.
-5. Add adapter conformance tests and cross-dialect query parity checks.
+Implementation:
+1. Define feature-builder contract:
+   - `feature_builder(schema, plan) -> dataframe`
+2. Keep mining algorithms generic:
+   - Trend analysis.
+   - Clustering/segmentation.
+3. Add optional domain packs for higher quality mappings.
 
 Deliverables:
-1. Adapter-based execution layer.
-2. Schema introspection pipeline for at least 3 SQL engines.
-3. Dialect-aware SQL generation and validation strategy.
+1. Generic mining interface.
+2. Pluggable feature builders/domain packs.
 
 Exit Criteria:
-1. Same natural-language query flow works on PostgreSQL and at least one additional engine.
-2. Core analytical query outputs are consistent across supported adapters (within acceptable tolerances).
+1. Same mining pipeline runs on different schemas with mapped features.
+2. Domain packs improve quality without changing core engine.
 
-### Phase 9: Documentation and Presentation Readiness
+### Phase 9: Grounded Insight Generator
 Objective:
-Package the system into a complete academic and engineering deliverable.
+Ensure narratives are evidence-backed and non-hallucinated.
 
-Implementation Description:
-1. Produce system documentation:
-   - Architecture diagram.
-   - ER diagram.
-   - Sequence/flow diagram.
-   - Module-level design notes.
-2. Document algorithms and evaluation methodology.
-3. Prepare reproducibility guide:
-   - Setup steps.
-   - Environment variables.
-   - ETL and API run commands.
-4. Compile final results, limitations, and future enhancements.
-5. Build demo script and screenshots.
+Implementation:
+1. LLM input restricted to:
+   - Structured plan.
+   - Computed outputs.
+   - Evidence keys only.
+2. Enforce claim grounding:
+   - Every claim maps to an evidence key/path.
+   - Reject output if ungrounded.
+3. Deterministic fallback report if validation fails.
 
 Deliverables:
-1. Project report and slide deck artifacts.
-2. Reproducible runbook for evaluators.
+1. Insight schema and validation gate.
+2. Traceability map for each report claim.
 
 Exit Criteria:
-1. Reviewer can reproduce and understand the full system.
-2. Presentation clearly links architecture, implementation, and outcomes.
+1. No report claim without evidence mapping.
+2. Fallback path keeps endpoint reliable.
 
-## 4. Recommended Repository Structure
+### Phase 10: Adapter Architecture for Multi-DB
+Objective:
+Support multiple SQL engines with one orchestration flow.
+
+Implementation:
+1. Implement adapter interface:
+   - `adapters/base.py`
+   - `adapters/postgres.py`
+   - `adapters/mysql.py`
+   - `adapters/sqlite.py`
+2. Each adapter handles:
+   - Introspection queries.
+   - Dialect-specific SQL rendering.
+   - Execution and type normalization.
+
+Deliverables:
+1. Adapter framework + concrete adapters.
+2. Dialect compatibility tests.
+
+Exit Criteria:
+1. Same user query flow works across supported engines.
+2. Output parity is acceptable across adapters.
+
+### Phase 11: Metadata Persistence and Caching
+Objective:
+Improve performance and stability with persistent metadata.
+
+Implementation:
+1. Persist schema snapshots by data source.
+2. Refresh snapshots only when schema hash changes.
+3. Cache common plan-to-SQL patterns.
+
+Deliverables:
+1. Metadata store with schema versioning.
+2. Cache policies and invalidation strategy.
+
+Exit Criteria:
+1. Reduced planning latency on repeated workloads.
+2. Correct invalidation on schema changes.
+
+### Phase 12: Evaluation and “Any Dataset” Claim Validation
+Objective:
+Measure true autonomy and portability.
+
+Implementation:
+1. Evaluate on at least 3 different datasets/schemas.
+2. Track metrics:
+   - Planning accuracy
+   - SQL execution success
+   - Answer groundedness
+   - Latency
+   - Retry rate
+3. Publish failure analysis and limits.
+
+Deliverables:
+1. Evaluation report across datasets.
+2. Quantified portability claims.
+
+Exit Criteria:
+1. Metrics meet predefined acceptance thresholds.
+2. Claims are evidence-backed and reproducible.
+
+## 4. Updated Repository Structure
 ```text
 project/
-  data/
-    raw/
-    processed/
-  etl/
-    extract.py
-    transform.py
-    load.py
-    pipeline.py
-  agent/
-    planner.py
-    sql_generator.py
-    executor.py
-    evaluator.py
-    prompts/
-  mining/
-    trend.py
-    rfm.py
-    clustering.py
-  api/
-    main.py
-    routes.py
-    schemas.py
   adapters/
     base.py
     postgres.py
     mysql.py
     sqlite.py
+  metadata/
+    schema_cache/
+    semantic_maps/
+  etl/
+  agent/
+    planner.py
+    sql_generator.py
+    executor.py
+    evaluator.py
+    insight_generator.py
+    insight_llm.py
+  schema/
+    introspector/
+    semantic_mapper/
+  mining/
+    trend.py
+    rfm.py
+    clustering.py
+    snapshots.py
+  api/
+    main.py
+    routes.py
+    schemas.py
+    report_schema.py
   sql/
     validations/
     benchmarks/
@@ -277,13 +329,14 @@ project/
 
 ## 5. Current Position and Immediate Next Step
 Current Position:
-1. PostgreSQL warehouse schema is created and hardened.
-2. Reproducible ETL pipeline is implemented and verified.
-3. Validation SQL baseline is implemented.
-4. Phase 4 autonomous SQL API baseline is operational (planner + generator + safe executor + evaluator).
+1. Core ETL and warehouse baseline are implemented.
+2. Safe SQL API flow is implemented.
+3. Mining snapshot caching and structured report endpoint are implemented.
+4. Ollama-powered planner and optional Ollama-powered insight narration are integrated.
 
 Immediate Next Step:
-Start Phase 5 by implementing the Pattern Mining Engine:
-1. `mining/trend.py` for monthly trend slope and direction.
-2. `mining/rfm.py` for customer-level Recency/Frequency/Monetary features.
-3. `mining/clustering.py` for KMeans segmentation + silhouette validation.
+Start implementing Phase 3 and Phase 4 in code:
+1. Build `schema/introspector` for PostgreSQL first.
+2. Build semantic mapper with entity/value/time scoring.
+3. Add `agent/sql_llm_generator.py` to generate SQL from schema context.
+4. Wire guarded execution + self-healing retries for generated SQL.

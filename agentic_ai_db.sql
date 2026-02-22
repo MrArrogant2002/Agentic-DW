@@ -53,5 +53,7 @@ CREATE TABLE IF NOT EXISTS mining_snapshots (
     snapshot_type VARCHAR(64) PRIMARY KEY,
     snapshot_json JSONB NOT NULL,
     source_max_date DATE,
+    snapshot_version INTEGER NOT NULL DEFAULT 1,
+    run_id VARCHAR(64),
     generated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

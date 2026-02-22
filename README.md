@@ -127,25 +127,44 @@ Run API:
 uvicorn api.main:app --reload
 ```
 
-Ollama planner configuration (optional, defaults shown):
+Ollama planner configuration (required):
 
 - `OLLAMA_PLANNER_ENABLED=1`
 - `OLLAMA_MODEL=mistral:latest`
 - `OLLAMA_BASE_URL=http://localhost:11434`
 - `OLLAMA_TIMEOUT_SEC=20`
 
-If Ollama is unavailable, planner falls back to rule-based intent mapping.
+Planner is Ollama-only in the current implementation. If Ollama is unavailable or disabled, `/analyze` returns an error.
 
 Endpoints:
 
 - `GET /health`
 - `POST /analyze`
 - `POST /analyze/debug`
+- `POST /analyze/report`
+- `POST /mining/refresh`
 
 `/analyze` response includes:
 
-- `planner_source` (`ollama` or `fallback`)
+- `planner_source` (`ollama`)
 - `retries_used` (0 or 1)
+
+Structured report endpoint:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/analyze/report" \
+  -H "Content-Type: application/json" \
+  -d "{\"question\":\"show trend analysis\"}"
+```
+
+Optional Ollama-based insight narration for `/analyze/report`:
+
+- `INSIGHT_MODEL_ENABLED=1`
+- `INSIGHT_MODEL=mistral:latest` (or reuse `OLLAMA_MODEL`)
+- `INSIGHT_MODEL_BASE_URL=http://localhost:11434` (or reuse `OLLAMA_BASE_URL`)
+- `INSIGHT_MODEL_TIMEOUT_SEC=20`
+
+When enabled, LLM-generated insights are accepted only if evidence keys map to actual computed values; otherwise API falls back to deterministic insights.
 
 Example request:
 
@@ -193,3 +212,11 @@ Snapshot cache behavior in API:
 - For mining intents (`trend_analysis`, `customer_segmentation`), `/analyze` serves from `mining_snapshots`.
 - If snapshot is missing or stale, API recomputes and updates snapshot automatically.
 - Staleness TTL can be configured with `MINING_SNAPSHOT_TTL_HOURS` (default: `24`).
+- Each snapshot includes `snapshot_version` and `run_id` for traceability.
+
+Refresh snapshots from API:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/mining/refresh" -H "Content-Type: application/json" -d "{\"refresh_all\":true}"
+curl -X POST "http://127.0.0.1:8000/mining/refresh" -H "Content-Type: application/json" -d "{\"snapshot_type\":\"trend_analysis\",\"refresh_all\":false}"
+```

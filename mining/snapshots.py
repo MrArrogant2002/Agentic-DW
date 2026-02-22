@@ -1,8 +1,9 @@
 import argparse
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List
+from uuid import uuid4
 
 from mining.clustering import run_kmeans
 from mining.common import db_cursor
@@ -19,11 +20,15 @@ def ensure_snapshot_table() -> None:
             snapshot_type VARCHAR(64) PRIMARY KEY,
             snapshot_json JSONB NOT NULL,
             source_max_date DATE,
+            snapshot_version INTEGER NOT NULL DEFAULT 1,
+            run_id VARCHAR(64),
             generated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
     """
     with db_cursor(write=True) as cur:
         cur.execute(sql)
+        cur.execute("ALTER TABLE mining_snapshots ADD COLUMN IF NOT EXISTS snapshot_version INTEGER NOT NULL DEFAULT 1")
+        cur.execute("ALTER TABLE mining_snapshots ADD COLUMN IF NOT EXISTS run_id VARCHAR(64)")
 
 
 def _get_fact_max_date():
@@ -49,27 +54,36 @@ def refresh_snapshot(snapshot_type: str) -> Dict[str, Any]:
     ensure_snapshot_table()
     payload = _build_snapshot_payload(snapshot_type)
     source_max_date = _get_fact_max_date()
-    generated_at = datetime.utcnow().isoformat() + "Z"
+    generated_at = datetime.now(timezone.utc).isoformat()
+    run_id = str(uuid4())
 
     with db_cursor(write=True) as cur:
         cur.execute(
             """
-            INSERT INTO mining_snapshots (snapshot_type, snapshot_json, source_max_date, generated_at)
-            VALUES (%s, %s::jsonb, %s, CURRENT_TIMESTAMP)
+            INSERT INTO mining_snapshots (snapshot_type, snapshot_json, source_max_date, snapshot_version, run_id, generated_at)
+            VALUES (%s, %s::jsonb, %s, 1, %s, CURRENT_TIMESTAMP)
             ON CONFLICT (snapshot_type)
             DO UPDATE SET
                 snapshot_json = EXCLUDED.snapshot_json,
                 source_max_date = EXCLUDED.source_max_date,
+                snapshot_version = mining_snapshots.snapshot_version + 1,
+                run_id = EXCLUDED.run_id,
                 generated_at = CURRENT_TIMESTAMP
+            RETURNING snapshot_version, generated_at
             """,
-            (snapshot_type, json.dumps(payload), source_max_date),
+            (snapshot_type, json.dumps(payload), source_max_date, run_id),
         )
+        row = cur.fetchone()
+    snapshot_version = int(row[0]) if row and row[0] is not None else 1
+    generated_at_db = row[1].isoformat() if row and row[1] else generated_at
 
     return {
         "snapshot_type": snapshot_type,
         "snapshot_json": payload,
         "source_max_date": str(source_max_date) if source_max_date else None,
-        "generated_at": generated_at,
+        "snapshot_version": snapshot_version,
+        "run_id": run_id,
+        "generated_at": generated_at_db,
         "refreshed": True,
     }
 
@@ -79,7 +93,7 @@ def _read_snapshot(snapshot_type: str) -> Dict[str, Any] | None:
     with db_cursor() as cur:
         cur.execute(
             """
-            SELECT snapshot_json, source_max_date, generated_at
+            SELECT snapshot_json, source_max_date, snapshot_version, run_id, generated_at
             FROM mining_snapshots
             WHERE snapshot_type = %s
             """,
@@ -92,7 +106,9 @@ def _read_snapshot(snapshot_type: str) -> Dict[str, Any] | None:
         "snapshot_type": snapshot_type,
         "snapshot_json": row[0],
         "source_max_date": str(row[1]) if row[1] else None,
-        "generated_at": row[2].isoformat() if row[2] else None,
+        "snapshot_version": int(row[2]) if row[2] is not None else None,
+        "run_id": row[3],
+        "generated_at": row[4].isoformat() if row[4] else None,
         "refreshed": False,
     }
 

@@ -1,8 +1,8 @@
 import json
 import os
 import re
-from urllib import error, request
 from dataclasses import dataclass
+from urllib import error, request
 
 from utils.env_loader import load_environments
 
@@ -26,28 +26,6 @@ _VALID_INTENTS = {
 }
 
 
-def _heuristic_plan(question: str) -> Plan:
-    text = question.strip().lower()
-    requires_mining = any(token in text for token in ("trend", "segment", "cluster", "rfm", "anomaly"))
-
-    if any(token in text for token in ("trend", "growth", "decline", "upward", "downward")):
-        intent = "trend_analysis"
-    elif any(token in text for token in ("segment", "segmentation", "cluster", "clusters", "rfm")):
-        intent = "customer_segmentation"
-    elif any(token in text for token in ("country", "countries", "nation", "nations")):
-        intent = "country_revenue"
-    elif "customer" in text and ("top" in text or "best" in text):
-        intent = "top_customers"
-    elif "product" in text and ("top" in text or "best" in text):
-        intent = "top_products"
-    elif "month" in text or "monthly" in text:
-        intent = "monthly_revenue"
-    else:
-        intent = "generic_sales_summary"
-
-    return Plan(question=question, requires_mining=requires_mining, intent=intent, planner_source="fallback")
-
-
 def _extract_json_blob(text: str) -> dict:
     fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, flags=re.DOTALL | re.IGNORECASE)
     if fenced:
@@ -60,11 +38,25 @@ def _extract_json_blob(text: str) -> dict:
     return json.loads(text)
 
 
-def _ollama_plan(question: str) -> Plan:
+def build_plan(question: str) -> Plan:
     load_environments()
-    model = os.getenv("OLLAMA_MODEL", "mistral:latest")
-    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    timeout_sec = float(os.getenv("OLLAMA_TIMEOUT_SEC", "20"))
+    model = os.getenv("OLLAMA_MODEL")
+    base_url = os.getenv("OLLAMA_BASE_URL")
+    timeout_raw = os.getenv("OLLAMA_TIMEOUT_SEC")
+    planner_enabled = os.getenv("OLLAMA_PLANNER_ENABLED")
+
+    if not planner_enabled:
+        raise RuntimeError("OLLAMA_PLANNER_ENABLED is required")
+    if planner_enabled.strip().lower() in {"0", "false", "no"}:
+        raise RuntimeError("OLLAMA planner is disabled via OLLAMA_PLANNER_ENABLED")
+    if not model:
+        raise RuntimeError("OLLAMA_MODEL is required")
+    if not base_url:
+        raise RuntimeError("OLLAMA_BASE_URL is required")
+    if not timeout_raw:
+        raise RuntimeError("OLLAMA_TIMEOUT_SEC is required")
+
+    timeout_sec = float(timeout_raw)
 
     prompt = (
         "You are a planner for a retail SQL analytics system.\n"
@@ -107,35 +99,10 @@ def _ollama_plan(question: str) -> Plan:
     if intent not in _VALID_INTENTS:
         raise RuntimeError(f"Ollama returned invalid intent: {intent}")
 
-    return Plan(question=question, requires_mining=requires_mining, intent=intent, planner_source="ollama")
+    return Plan(
+        question=question,
+        requires_mining=requires_mining,
+        intent=intent,
+        planner_source="ollama",
+    )
 
-
-def build_plan(question: str) -> Plan:
-    load_environments()
-    heuristic_plan = _heuristic_plan(question)
-    if os.getenv("OLLAMA_PLANNER_ENABLED", "1").strip().lower() in {"0", "false", "no"}:
-        return heuristic_plan
-
-    try:
-        ollama_plan = _ollama_plan(question)
-        text = question.strip().lower()
-
-        # Deterministic correction for entity-specific questions where misclassification is costly.
-        if any(token in text for token in ("trend", "growth", "decline", "upward", "downward")):
-            ollama_plan.intent = "trend_analysis"
-        elif any(token in text for token in ("segment", "segmentation", "cluster", "clusters", "rfm")):
-            ollama_plan.intent = "customer_segmentation"
-        elif any(token in text for token in ("country", "countries", "nation", "nations")):
-            ollama_plan.intent = "country_revenue"
-        elif "customer" in text and ("top" in text or "best" in text):
-            ollama_plan.intent = "top_customers"
-        elif "product" in text and ("top" in text or "best" in text):
-            ollama_plan.intent = "top_products"
-        elif "month" in text or "monthly" in text:
-            ollama_plan.intent = "monthly_revenue"
-        elif ollama_plan.intent not in _VALID_INTENTS:
-            ollama_plan.intent = heuristic_plan.intent
-
-        return ollama_plan
-    except Exception:
-        return heuristic_plan
