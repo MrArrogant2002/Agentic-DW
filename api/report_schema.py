@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class QueryContext(BaseModel):
+    trace_id: str
     question: str
     intent: str
     planner_source: str
@@ -40,4 +41,3 @@ class AnalyzeReportResponse(BaseModel):
     traceability: List[TraceabilityItem]
     confidence: float = Field(..., ge=0.0, le=1.0)
     assumptions: List[str]
-

@@ -7,7 +7,7 @@ from api.main import app
 def test_analyze_mining_uses_snapshot(monkeypatch):
     client = TestClient(app)
 
-    def fake_build_plan(_question: str) -> Plan:
+    def fake_build_plan(_question: str, dataset_metadata=None) -> Plan:
         return Plan(
             question="show trend analysis",
             requires_mining=True,
@@ -96,4 +96,3 @@ def test_refresh_mining_all(monkeypatch):
     body = response.json()
     assert len(body["refreshed"]) == 2
     assert {item["snapshot_type"] for item in body["refreshed"]} == {"customer_segmentation", "trend_analysis"}
-

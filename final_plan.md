@@ -261,7 +261,7 @@ Exit Criteria:
 1. Reduced planning latency on repeated workloads.
 2. Correct invalidation on schema changes.
 
-### Phase 12: Evaluation and “Any Dataset” Claim Validation
+### Phase 12: Evaluation and "Any Dataset" Claim Validation
 Objective:
 Measure true autonomy and portability.
 
@@ -327,16 +327,45 @@ project/
   final_plan.md
 ```
 
-## 5. Current Position and Immediate Next Step
+## 5. Implementation Status Snapshot
+1. Phase 1 (Data Foundation and Warehouse Reliability): `Implemented (core)`  
+Core retail ETL, schema constraints, and reproducible load flow are implemented. Generic file ingestion onboarding is also added.
+2. Phase 2 (Analytical Baseline and Performance Verification): `Implemented (MVP)`  
+Validation SQL suite exists and benchmark tooling is implemented via `evaluation/benchmark_runner.py` + `sql/benchmarks/01_postgres_explain.sql`.
+3. Phase 3 (Schema Introspector Layer): `Implemented for PostgreSQL`  
+Postgres introspector now extracts tables, columns, PK/FK, row counts, and normalized metadata.
+4. Phase 4 (Semantic Mapping Layer): `Implemented (MVP)`  
+Standalone semantic mapper module exists (`schema/semantic_mapper/mapper.py`) and semantic maps are persisted per dataset.
+5. Phase 5 (Structured Planner): `Implemented (MVP)`  
+Planner now returns structured fields (`task_type`, `entity_scope`, `entity_dimension`, `n`, `metric`, `time_grain`, `compare_against`) using Ollama.
+6. Phase 6 (Dynamic SQL Builder + Safe Executor): `Implemented (MVP)`  
+Schema-aware LLM SQL generation, strict allowlist validation, adapter-aware execution routing, SQL cache reuse, and dialect rendering primitives are implemented.
+7. Phase 7 (Validation + Self-Healing Loop): `Implemented (MVP)`  
+Retry loop and error classification are integrated with bounded repair attempts, request-level tracing, and failure analytics reporting (`/evaluation/failures`).
+8. Phase 8 (Domain-Agnostic Mining Interface): `Implemented (MVP)`  
+`feature_builder(schema, plan)` is implemented and integrated into mining snapshots for dataset-scoped trend/segmentation features across onboarded schemas.
+9. Phase 9 (Grounded Insight Generator): `Implemented (MVP)`  
+Structured report with traceability is implemented; optional Ollama insight generation is grounded by evidence-key validation with deterministic fallback.
+10. Phase 10 (Adapter Architecture for Multi-DB): `Implemented (MVP)`  
+Adapter contract and concrete adapters (`postgres`, `sqlite`, `mysql`) are implemented, with adapter-routed execution/introspection and parity tests for SQLite + dialect renderer coverage.
+11. Phase 11 (Metadata Persistence and Caching): `Implemented`  
+Schema hash persistence, plan-to-SQL cache (schema-hash keyed), query trace logging, and PostgreSQL-backed metadata tables are implemented. File backend is retained as fallback for local/dev mode.
+12. Phase 12 (Evaluation and "Any Dataset" Validation): `Implemented (MVP)`  
+Evaluation metrics + failure analytics APIs exist, along with 3-dataset campaign tooling in both mock and live modes (`evaluation/run_campaign.py`) with thresholded report outputs.
+
+## 6. Current Position and Immediate Next Step
 Current Position:
 1. Core ETL and warehouse baseline are implemented.
 2. Safe SQL API flow is implemented.
 3. Mining snapshot caching and structured report endpoint are implemented.
-4. Ollama-powered planner and optional Ollama-powered insight narration are integrated.
+4. Ollama-powered structured planner, SQL generation + repair loop, and optional grounded insight narration are integrated.
+5. Dataset onboarding, file ingestion, schema introspection, semantic mapping, and metadata endpoints are implemented.
+6. Adapter architecture scaffold is in place (`postgres`, `sqlite`, `mysql`) with adapter-routed execution/introspection.
+7. Request trace IDs, prompt-version tracking, and plan-to-SQL caching are integrated.
+8. Evaluation metrics endpoint is available for runtime telemetry rollups.
 
 Immediate Next Step:
-Start implementing Phase 3 and Phase 4 in code:
-1. Build `schema/introspector` for PostgreSQL first.
-2. Build semantic mapper with entity/value/time scoring.
-3. Add `agent/sql_llm_generator.py` to generate SQL from schema context.
-4. Wire guarded execution + self-healing retries for generated SQL.
+Production hardening and ops:
+1. Execute live campaign using `evaluation/live_datasets.json` against real onboarded datasets and publish report artifacts in `docs/`.
+2. Add CI jobs for benchmark + evaluation report generation.
+3. Add retention/partition policy for PostgreSQL trace tables at high volume.

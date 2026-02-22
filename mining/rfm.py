@@ -1,6 +1,6 @@
 import argparse
 import json
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Dict, List
 
 from mining.common import db_cursor
@@ -59,6 +59,69 @@ def summarize_rfm(rfm_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "monetary_max": round(max(monies), 4),
         "monetary_total": round(sum(monies), 4),
     }
+
+
+def normalize_rfm_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if not rows:
+        return []
+
+    # If recency_days is missing but latest_event_date exists, derive recency from max date.
+    if "recency_days" not in rows[0] and "latest_event_date" in rows[0]:
+        parsed_dates: List[date] = []
+        for row in rows:
+            raw = row.get("latest_event_date")
+            if raw is None:
+                continue
+            if isinstance(raw, datetime):
+                parsed_dates.append(raw.date())
+            elif isinstance(raw, date):
+                parsed_dates.append(raw)
+            else:
+                try:
+                    parsed_dates.append(datetime.fromisoformat(str(raw).replace("Z", "+00:00")).date())
+                except ValueError:
+                    continue
+        ref_date = max(parsed_dates) if parsed_dates else date.today()
+    else:
+        ref_date = date.today()
+
+    normalized: List[Dict[str, Any]] = []
+    for row in rows:
+        entity = row.get("entity_id") if row.get("entity_id") is not None else row.get("customer_id")
+        if entity is None:
+            continue
+
+        recency_days = row.get("recency_days")
+        if recency_days is None and row.get("latest_event_date") is not None:
+            raw = row.get("latest_event_date")
+            if isinstance(raw, datetime):
+                latest = raw.date()
+            elif isinstance(raw, date):
+                latest = raw
+            else:
+                try:
+                    latest = datetime.fromisoformat(str(raw).replace("Z", "+00:00")).date()
+                except ValueError:
+                    continue
+            recency_days = (ref_date - latest).days
+
+        try:
+            frequency = int(row.get("frequency", 0))
+            monetary = float(row.get("monetary", 0.0))
+            recency = int(recency_days)
+        except (TypeError, ValueError):
+            continue
+
+        normalized.append(
+            {
+                "customer_id": str(entity),
+                "recency_days": recency,
+                "frequency": frequency,
+                "monetary": monetary,
+            }
+        )
+
+    return normalized
 
 
 def run(reference_date: date | None = None) -> Dict[str, Any]:

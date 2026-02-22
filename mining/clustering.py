@@ -1,13 +1,13 @@
 import argparse
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 
-from mining.rfm import fetch_rfm
+from mining.rfm import fetch_rfm, normalize_rfm_rows
 
 
 def _cluster_label(recency: float, frequency: float, monetary: float, medians: Dict[str, float]) -> str:
@@ -20,8 +20,16 @@ def _cluster_label(recency: float, frequency: float, monetary: float, medians: D
     return "dormant_mid_value"
 
 
-def run_kmeans(k: int = 4, random_state: int = 42, n_init: int = 20) -> Dict[str, Any]:
-    rfm_rows = fetch_rfm()
+def run_kmeans(
+    k: int = 4,
+    random_state: int = 42,
+    n_init: int = 20,
+    rfm_rows: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    if rfm_rows is None:
+        rfm_rows = fetch_rfm()
+    else:
+        rfm_rows = normalize_rfm_rows(rfm_rows)
     if len(rfm_rows) < max(k, 3):
         return {
             "status": "insufficient_data",

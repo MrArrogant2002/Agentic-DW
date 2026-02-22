@@ -1,0 +1,29 @@
+{
+  "sql_file": "sql\\benchmarks\\01_postgres_explain.sql",
+  "statement_count": 3,
+  "avg_execution_time_ms": null,
+  "max_execution_time_ms": null,
+  "results": [
+    {
+      "statement_index": 1,
+      "execution_time_ms": null,
+      "explain_output": [],
+      "status": "error",
+      "error": "relation \"fact_sales\" does not exist\nLINE 4: FROM fact_sales\n             ^"
+    },
+    {
+      "statement_index": 2,
+      "execution_time_ms": null,
+      "explain_output": [],
+      "status": "error",
+      "error": "relation \"fact_sales\" does not exist\nLINE 3: FROM fact_sales f\n             ^"
+    },
+    {
+      "statement_index": 3,
+      "execution_time_ms": null,
+      "explain_output": [],
+      "status": "error",
+      "error": "relation \"fact_sales\" does not exist\nLINE 4: FROM fact_sales f\n             ^"
+    }
+  ]
+}

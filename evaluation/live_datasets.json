@@ -1,0 +1,23 @@
+[
+  {
+    "dataset_id": "replace-with-dataset-id-1",
+    "questions": [
+      "Top 5 entities by revenue",
+      "show trend analysis"
+    ]
+  },
+  {
+    "dataset_id": "replace-with-dataset-id-2",
+    "questions": [
+      "Top 5 segments by value",
+      "show trend analysis"
+    ]
+  },
+  {
+    "dataset_id": "replace-with-dataset-id-3",
+    "questions": [
+      "Top 5 groups by score",
+      "show trend analysis"
+    ]
+  }
+]

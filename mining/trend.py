@@ -1,6 +1,7 @@
 import argparse
 import json
-from typing import Any, Dict, List
+from datetime import date, datetime
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -57,6 +58,39 @@ def analyze_trend(monthly_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "start_revenue": round(float(monthly_rows[0]["revenue"]), 4),
         "end_revenue": round(float(monthly_rows[-1]["revenue"]), 4),
     }
+
+
+def normalize_period_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    normalized: List[Dict[str, Any]] = []
+    for row in rows:
+        raw_period = row.get("period_start") or row.get("month_key")
+        raw_value = row.get("metric_value") if row.get("metric_value") is not None else row.get("revenue")
+        if raw_period is None or raw_value is None:
+            continue
+        if isinstance(raw_period, datetime):
+            month_key = raw_period.strftime("%Y-%m")
+        elif isinstance(raw_period, date):
+            month_key = raw_period.strftime("%Y-%m")
+        else:
+            month_key = str(raw_period)[:7]
+        try:
+            revenue = float(raw_value)
+        except (TypeError, ValueError):
+            continue
+        normalized.append({"month_key": month_key, "revenue": revenue})
+    normalized.sort(key=lambda r: r["month_key"])
+    return normalized
+
+
+def run_from_rows(rows: List[Dict[str, Any]], global_rows: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    monthly = normalize_period_rows(rows)
+    trend = analyze_trend(monthly)
+    payload: Dict[str, Any] = {"monthly_revenue": monthly, "trend": trend}
+    if global_rows is not None:
+        global_monthly = normalize_period_rows(global_rows)
+        payload["global_monthly_revenue"] = global_monthly
+        payload["global_trend"] = analyze_trend(global_monthly)
+    return payload
 
 
 def run() -> Dict[str, Any]:

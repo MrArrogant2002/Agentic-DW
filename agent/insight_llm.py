@@ -62,7 +62,12 @@ def _build_evidence_map(analysis: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     return evidence
 
 
-def _call_ollama_for_insights(analysis: Dict[str, Any], evidence_map: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+def _call_ollama_for_insights(
+    analysis: Dict[str, Any],
+    evidence_map: Dict[str, Dict[str, Any]],
+    trace_id: str | None = None,
+    prompt_version: str | None = None,
+) -> Dict[str, Any]:
     load_environments()
     model = os.getenv("INSIGHT_MODEL") or os.getenv("OLLAMA_MODEL")
     base_url = os.getenv("INSIGHT_MODEL_BASE_URL") or os.getenv("OLLAMA_BASE_URL")
@@ -74,8 +79,12 @@ def _call_ollama_for_insights(analysis: Dict[str, Any], evidence_map: Dict[str, 
 
     timeout_sec = float(timeout_raw)
 
+    resolved_prompt_version = prompt_version or os.getenv("INSIGHT_PROMPT_VERSION", "v1")
+
     prompt = (
         "You generate business insights from evidence. Never invent numbers.\n"
+        f"Prompt version: {resolved_prompt_version}\n"
+        f"Trace id: {trace_id or 'none'}\n"
         "Return JSON only with keys: key_findings, risk_flags, recommended_actions, confidence, assumptions.\n"
         "key_findings items must have: finding, evidence_key, unit.\n"
         "Use only evidence_key values provided.\n"
@@ -112,12 +121,21 @@ def _call_ollama_for_insights(analysis: Dict[str, Any], evidence_map: Dict[str, 
     return _extract_json_blob(response_text)
 
 
-def generate_llm_sections(analysis: Dict[str, Any]) -> Dict[str, Any]:
+def generate_llm_sections(
+    analysis: Dict[str, Any],
+    trace_id: str | None = None,
+    prompt_version: str | None = None,
+) -> Dict[str, Any]:
     evidence_map = _build_evidence_map(analysis)
     if not evidence_map:
         raise RuntimeError("No evidence available for LLM insights")
 
-    generated = _call_ollama_for_insights(analysis, evidence_map)
+    generated = _call_ollama_for_insights(
+        analysis,
+        evidence_map,
+        trace_id=trace_id,
+        prompt_version=prompt_version,
+    )
     key_findings = generated.get("key_findings")
     risk_flags = generated.get("risk_flags")
     recommended_actions = generated.get("recommended_actions")
@@ -165,4 +183,3 @@ def generate_llm_sections(analysis: Dict[str, Any]) -> Dict[str, Any]:
         "confidence": max(0.0, min(1.0, float(confidence))),
         "assumptions": [str(x) for x in assumptions],
     }
-

@@ -1,0 +1,29 @@
+{
+  "mode": "mock",
+  "metrics": {
+    "totals": {
+      "analyze_requests": 16,
+      "insight_requests_enabled": 0
+    },
+    "rates": {
+      "execution_success_rate": 1.0,
+      "retry_rate": 0.125,
+      "cache_hit_rate": 0.25,
+      "insight_groundedness_rate": 0.0
+    },
+    "latency_ms": {
+      "avg_total": 377.885
+    }
+  },
+  "thresholds": {
+    "min_execution_success_rate": 0.9,
+    "max_retry_rate": 0.3,
+    "max_avg_latency_ms": 2000.0
+  },
+  "verdict": {
+    "execution_success_rate_ok": true,
+    "retry_rate_ok": true,
+    "avg_latency_ok": true,
+    "all_ok": true
+  }
+}

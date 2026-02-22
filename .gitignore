@@ -12,11 +12,18 @@ __pycache__/
 # Virtual environments
 .venv/
 
-.env
-
 # ETL/generated artifacts
 data/processed/
 *.log
+
+# Runtime metadata artifacts
+metadata/dataset_registry.json
+metadata/plan_sql_cache.json
+metadata/query_traces.jsonl
+metadata/schema_cache/
+metadata/semantic_maps/
+metadata/ingestion_runs/
+metadata/quality_reports/
 
 # OS / editor
 .DS_Store

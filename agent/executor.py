@@ -1,8 +1,9 @@
 import os
 import re
 from contextlib import contextmanager
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
+from adapters.factory import get_adapter
 from utils.env_loader import load_environments
 
 
@@ -99,13 +100,25 @@ def db_session():
         conn.close()
 
 
-def execute_safe_query(sql: str, row_limit: int = 100, timeout_ms: int = 15_000) -> List[Dict[str, Any]]:
+def execute_safe_query(
+    sql: str,
+    row_limit: int = 100,
+    timeout_ms: int = 15_000,
+    db_engine: Optional[str] = None,
+    source_config: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
     if row_limit <= 0:
         raise ValueError("row_limit must be positive")
     if timeout_ms <= 0:
         raise ValueError("timeout_ms must be positive")
 
     safe_sql = validate_sql(sql)
+    selected_engine = (db_engine or os.getenv("DB_ENGINE", "postgres")).strip().lower()
+
+    if selected_engine not in {"postgres", "postgresql"} or source_config:
+        adapter = get_adapter(db_engine=selected_engine, source_config=source_config)
+        return adapter.execute_select(safe_sql, row_limit=row_limit, timeout_ms=timeout_ms)
+
     wrapped_sql = f"SELECT * FROM ({safe_sql}) AS guarded_query LIMIT %s"
 
     with db_session() as (conn, driver):

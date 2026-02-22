@@ -11,6 +11,16 @@ This repository now includes a baseline implementation for:
 
 ```text
 project/
+  adapters/
+    base.py
+    postgres.py
+    sqlite.py
+    mysql.py
+  metadata/
+    schema_cache/
+    semantic_maps/
+    plan_sql_cache.json
+    query_traces.jsonl
   data/
     raw/
     processed/
@@ -22,6 +32,7 @@ project/
   agent/
     prompts/
   mining/
+  evaluation/
   api/
   sql/
     validations/
@@ -139,13 +150,23 @@ Planner is Ollama-only in the current implementation. If Ollama is unavailable o
 Endpoints:
 
 - `GET /health`
+- `POST /dataset/onboard`
+- `POST /dataset/upload`
+- `GET /dataset/list`
+- `GET /dataset/{dataset_id}/metadata`
+- `POST /dataset/{dataset_id}/refresh`
+- `POST /dataset/{dataset_id}/ingest`
+- `GET /dataset/{dataset_id}/ingest/status`
 - `POST /analyze`
 - `POST /analyze/debug`
 - `POST /analyze/report`
 - `POST /mining/refresh`
+- `GET /evaluation/metrics`
+- `GET /evaluation/failures`
 
 `/analyze` response includes:
 
+- `trace_id` (request-level observability ID)
 - `planner_source` (`ollama`)
 - `retries_used` (0 or 1)
 
@@ -173,6 +194,131 @@ curl -X POST "http://127.0.0.1:8000/analyze" \
   -H "Content-Type: application/json" \
   -d "{\"question\":\"Top 5 countries by revenue\",\"row_limit\":5}"
 ```
+
+Dataset onboarding and metadata introspection:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/dataset/onboard" \
+  -H "Content-Type: application/json" \
+  -d "{\"name\":\"retail-public\",\"db_engine\":\"postgres\",\"schema_name\":\"public\"}"
+
+curl "http://127.0.0.1:8000/dataset/list"
+curl "http://127.0.0.1:8000/dataset/<dataset_id>/metadata"
+curl -X POST "http://127.0.0.1:8000/dataset/<dataset_id>/refresh"
+```
+
+File dataset flow (ingest + introspect):
+
+```bash
+curl -X POST "http://127.0.0.1:8000/dataset/upload" \
+  -H "Content-Type: application/json" \
+  -d "{\"name\":\"student-scores\",\"file_path\":\"C:/data/student_scores.csv\"}"
+
+curl -X POST "http://127.0.0.1:8000/dataset/<dataset_id>/ingest"
+curl "http://127.0.0.1:8000/dataset/<dataset_id>/ingest/status"
+curl "http://127.0.0.1:8000/dataset/<dataset_id>/metadata"
+```
+
+Use `dataset_id` in analysis requests to provide schema metadata context:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/analyze" \
+  -H "Content-Type: application/json" \
+  -d "{\"dataset_id\":\"<dataset_id>\",\"question\":\"top countries by revenue\"}"
+```
+
+Semantic map is persisted per dataset in `metadata/semantic_maps/` and used to rank entity/measure/time candidates.
+
+Structured planner output (internal contract) now includes:
+
+- `task_type`
+- `entity_scope`
+- `entity_dimension`
+- `n`
+- `metric`
+- `time_grain`
+- `compare_against`
+
+SQL generation now supports Ollama + repair loop:
+
+- `SQL_LLM_ENABLED=1`
+- `SQL_REPAIR_MAX_RETRIES=2`
+- `SQL_MODEL` (optional, falls back to `OLLAMA_MODEL`)
+- `SQL_MODEL_BASE_URL` (optional, falls back to `OLLAMA_BASE_URL`)
+- `SQL_MODEL_TIMEOUT_SEC=20`
+- `SQL_PROMPT_VERSION=v1`
+- `PLANNER_PROMPT_VERSION=v1`
+- `INSIGHT_PROMPT_VERSION=v1`
+- `DB_ENGINE=postgres` (or `sqlite`/`mysql` for adapter-based paths)
+
+Domain-agnostic mining (Phase 8 MVP):
+
+- Mining now uses a schema-aware `feature_builder(schema, plan)` (`mining/feature_builder.py`).
+- Trend and segmentation snapshots can be dataset-scoped (`dataset_id` + plan scope key).
+- For trend requests with `top_n` + `compare_against=global`, snapshot payload can include scoped and global trend evidence.
+
+Runtime metadata/cache artifacts:
+
+- `metadata/schema_cache/` stores introspected schema snapshots with `schema_hash`.
+- `metadata/plan_sql_cache.json` stores cached plan-to-SQL mappings (schema-hash keyed).
+- `metadata/query_traces.jsonl` stores request traces (planner/sql/execution/insight stages).
+
+PostgreSQL metadata backend (recommended):
+
+- `METADATA_BACKEND=postgres` to store datasets/metadata/cache/traces in DB tables.
+- `METADATA_BACKEND=file` to force local JSON files.
+- `METADATA_BACKEND=auto` (default): uses postgres when DB env vars are present.
+
+Create metadata tables:
+
+```bash
+psql -U $DB_USER -d $DB_NAME -f migrations/001_agent_metadata.sql
+```
+
+Or apply with `.env` auto-load:
+
+```bash
+python -m metadata.apply_metadata_migration
+```
+
+Migrate existing file metadata to PostgreSQL:
+
+```bash
+python -m metadata.migrate_to_postgres --pretty
+```
+
+Evaluation metrics API:
+
+```bash
+curl "http://127.0.0.1:8000/evaluation/metrics?limit=1000"
+curl "http://127.0.0.1:8000/evaluation/failures?limit=5000"
+```
+
+Run 3-dataset evaluation campaign (mock harness):
+
+```bash
+python -m evaluation.run_campaign --pretty
+```
+
+Run 3-dataset live evaluation campaign:
+
+```bash
+python -m evaluation.run_campaign --mode live --datasets-file evaluation/live_datasets.json --api-base-url http://127.0.0.1:8000 --pretty
+```
+
+Outputs:
+- `docs/evaluation_report.json`
+- `docs/evaluation.md`
+
+Run PostgreSQL benchmark suite (`EXPLAIN ANALYZE`):
+
+```bash
+python -m evaluation.benchmark_runner --pretty
+```
+
+Outputs:
+- `docs/benchmark_report.json`
+- `docs/benchmark_report.md`
 
 ## Phase 5 Mining Modules
 
